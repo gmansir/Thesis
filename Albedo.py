@@ -462,7 +462,7 @@ class AlbedoAnalysis:
             kernel = np.exp(-x ** 2 / (2 * sigma ** 2))
             return kernel / np.sum(kernel)
 
-        def fitness_function(guesses, data_arr, solar_wav, solar_flux):
+        def fitness_function(guesses, data_wav, data_flux, solar_wav, solar_flux):
             # Unpack parameters
             kernel_size, sigma = guesses
 
@@ -472,10 +472,10 @@ class AlbedoAnalysis:
             smoothed_solar_spec = convolve1d(solar_flux, kernel, mode='constant')
 
             interp_func = interp1d(solar_wav, smoothed_solar_spec, kind='slinear')
-            interp_smooth = interp_func(data_arr)
+            interp_smooth = interp_func(data_wav)
 
             # Calculate mean squared error
-            mse = np.mean((interp_smooth - data_arr) ** 2)
+            mse = np.mean((interp_smooth - data_flux) ** 2)
 
             return mse
 
@@ -486,23 +486,21 @@ class AlbedoAnalysis:
         #solar_wav= np.array(solar_wav.tolist())
         #solar_flux = sun_flux_ir[:sun_lim]
         #solar_flux = np.array(solar_flux.tolist())
-        initial_guess=[6, 1]
+        initial_guess=[50, 10]
         results = []
         for b in best_solars:
             data_idx = np.abs(self.rv_corr - b) <= 0.04
-            data_arr = self.rv_corr[data_idx]
+            data_wav = self.rv_corr[data_idx]
+            data_flux = self.flux[data_idx]
             solar_idx = np.abs(sun_wave_ir - b) <= 0.04
             solar_wav = sun_wave_ir[solar_idx]
             solar_flux = sun_flux_ir[solar_idx]
             min_solar_wav = np.min(solar_wav)
             max_solar_wav = np.max(solar_wav)
-            data_arr = data_arr[(data_arr >= min_solar_wav) & (data_arr <= max_solar_wav)]
-            result = minimize(fitness_function, initial_guess, args=(data_arr,solar_wav, solar_flux), method='Nelder-Mead')
+            data_wav = data_wav[(data_wav >= min_solar_wav) & (data_wav <= max_solar_wav)]
+            result = minimize(fitness_function, initial_guess, args=(data_wav,data_flux,solar_wav, solar_flux), method='Nelder-Mead')
             results.append(result.x)
-        results = np.array(results)
-        size = np.mean(results[:, 0])
-        sigma = np.mean(results[:, 1])
-        print('Size, Sigma:', size, sigma)
+            print(f"Wavelength: {b}, Size: {result.x[0]}, Sigma: {result.x[1]}")
         # Use these optimal values to smooth the solar spectrum
         optimal_gaussian = gaussian_kernel(size, sigma)
         smoothed_solar_spectrum = convolve1d(sun_flux_ir, optimal_gaussian, mode='constant')
